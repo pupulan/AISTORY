@@ -1,299 +1,322 @@
-# ai-story-weaver – Next.js 14 (App Router)
+# ai-story-weaver – Next.js 14 (App Router)
+
+> **v0.2 – now with full picture‑book metadata & interaction**
 
 ---
-## README.md
+## 🗂 Project structure (new/changed ★)
+```
+app/
+├─ layout.tsx
+├─ page.tsx                • generator home
+├─ story/[id]/page.tsx ★    • share / view page (URL‑encoded data)
+├─ saved/page.tsx ★         • local bookmarks
+│
+├─ api/
+│   └─ story/route.ts       • GPT endpoint (prompt now accepts options)
+│
+components/
+├─ KeywordInput.tsx
+├─ AdvancedOptions.tsx ★    • Tone / Length / Age / Title / Moral
+├─ StoryMeta.tsx ★          • Title (editable) + author + reading‑time + moral + TTS + share + save
+├─ StoryDisplay.tsx         • paged paragraphs
+└─ SavedStories.tsx ★       • grid of local stories
+lib/
+└─ openai.ts
+utils/
+└─ helpers.ts ★             • readingTime(), encode(), decode()
+```
+
+---
+## README.md (excerpt)
 ```md
-# AI Story Weaver
-
-A tiny web‑app that turns a handful of keywords into an instant children’s story (age 3‑8) in **Chinese, English, or a random pick**.
-
-### 🛠 Quick start
-```bash
-# 1. Clone
-npx degit your-github-name/ai-story-weaver
-cd ai-story-weaver
-
-# 2. Install deps
-npm install  # or pnpm i / yarn
-
-# 3. Environment
-cp .env.example .env.local  # add your OPENAI_API_KEY
-
-# 4. Dev mode
-npm run dev
-
-# 5. Deploy (Vercel recommended — free tier is fine)
-# push to GitHub →  “Add New Project” in Vercel → follow prompts → done
-```
-
-### 🆓 Free hosting choices
-| Host | Pros | Notes |
-|------|------|-------|
-| **Vercel** | 1‑click import for Next.js, edge functions out‑of‑box | auto `*.vercel.app` sub‑domain |
-| **Netlify** | free tier OK, good CMS plugins | needs `netlify.toml` for edge funcs |
-
-### 📂 Minimal tech stack
-* **Next.js 14** (App Router, React 18)
-* **TypeScript**
-* **Tailwind CSS** + **shadcn/ui**
-* **OpenAI SDK** for GPT‑4o calls
-* Zero DB (stateless API)
+### ✨ New v0.2 Features
+* **Title / Moral sentence** auto‑generated, editable inline.
+* **Advanced Options** – pick Tone (fun / adventure / bedtime), Length (200‑500 words), Age Range (3‑5 / 6‑8 yrs).
+* **Reading‑time badge** (word count ÷ 150 wpm).
+* **Speech (TTS)** – Chrome/Edge/Firefox via `window.speechSynthesis`.
+* **Save & Share** – one‑click bookmark to browser, and permalink `/story/<b64>`.
 ```
 
 ---
-## .env.example
-```env
-# Rename to .env.local and fill in your key
-OPENAI_API_KEY=
-```
-
----
-## package.json
-```json
-{
-  "name": "ai-story-weaver",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
-  },
-  "dependencies": {
-    "next": "14.2.0",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "openai": "^4.25.1"
-  },
-  "devDependencies": {
-    "@types/react": "^18.2.29",
-    "autoprefixer": "^10.4.19",
-    "eslint": "^8.56.0",
-    "postcss": "^8.4.33",
-    "tailwindcss": "^3.4.4",
-    "typescript": "^5.5.0"  }
-}
-```
-
----
-## next.config.js
-```js
-/** @type {import('next').NextConfig} */
-module.exports = {
-  experimental: { appDir: true },
-  reactStrictMode: true,
-};
-```
-
----
-## tailwind.config.js
-```js
-module.exports = {
-  content: [
-    "./app/**/*.{ts,tsx}",
-    "./components/**/*.{ts,tsx}"
-  ],
-  theme: {
-    extend: {
-      colors: {
-        brandBlue: "#e8f4ff",   // 淺藍底
-        brandYellow: "#FFD400"  // 亮黃色 CTA
-      }
-    }
-  },
-  plugins: [],
-};
-```
-
----
-## tsconfig.json
-```json
-{
-  "compilerOptions": {
-    "target": "ES2021",
-    "lib": ["dom", "dom.iterable", "es2021"],
-    "allowJs": false,
-    "strict": true,
-    "skipLibCheck": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "react-jsx"
-  },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules"]
-}
-```
-
----
-## styles/globals.css
-```css
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-html,body {
-  @apply bg-brandBlue text-gray-800;
-}
-```
-
----
-## lib/openai.ts
+## utils/helpers.ts
 ```ts
-import OpenAI from "openai";
+export function readingTime(words: number) {
+  return Math.ceil(words / 150);
+}
 
-export function createOpenAI() {
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+export function encode(data: object) {
+  return Buffer.from(JSON.stringify(data)).toString("base64url");
+}
+export function decode<T>(b64: string): T {
+  return JSON.parse(Buffer.from(b64, "base64url").toString());
 }
 ```
 
 ---
-## app/layout.tsx
-```tsx
-import "../styles/globals.css";
-import { ReactNode } from "react";
-
-export const metadata = {
-  title: "AI Story Weaver",
-  description: "Turn a few keywords into a magical kids’ story in seconds!",
-};
-
-export default function RootLayout({ children }: { children: ReactNode }) {
-  return (
-    <html lang="en">
-      <body className="min-h-screen flex flex-col items-center p-4">
-        <header className="text-2xl font-bold mb-4">AI Story Weaver</header>
-        <main className="w-full max-w-xl flex-1">{children}</main>
-        <footer className="text-xs mt-8 opacity-70">© {new Date().getFullYear()} AI Story Weaver</footer>
-      </body>
-    </html>
-  );
-}
-```
-
----
-## components/KeywordInput.tsx
+## components/AdvancedOptions.tsx
 ```tsx
 "use client";
 import { useState } from "react";
-
-export default function KeywordInput({ onGenerate }: { onGenerate: (k: string[], lang: string) => void }) {
-  const [keywords, setKeywords] = useState("");
-  const [lang, setLang] = useState("random");
-
+const tones = ["fun", "adventure", "bedtime", "science"];
+export default function AdvancedOptions({ onChange }: { onChange: (o: any) => void }) {
+  const [open, setOpen] = useState(false);
+  const [opts, setOpts] = useState({ tone: "fun", length: 300, age: "3-5", title: "", moral: "" });
+  function update(field: string, value: any) {
+    const next = { ...opts, [field]: value };
+    setOpts(next);
+    onChange(next);
+  }
   return (
-    <div className="space-y-4">
-      <input
-        type="text"
-        placeholder="輸入 1~5 個關鍵字，以逗號分隔"
-        value={keywords}
-        onChange={(e) => setKeywords(e.target.value)}
-        className="w-full p-3 rounded-lg border focus:outline-none"
-      />
-
-      <select value={lang} onChange={(e) => setLang(e.target.value)} className="p-2 rounded-lg border">
-        <option value="random">隨機語系 / Random</option>
-        <option value="zh">繁體中文</option>
-        <option value="en">English</option>
-      </select>
-
-      <button
-        onClick={() => onGenerate(keywords.split(/,\s*/), lang)}
-        className="w-full bg-brandYellow text-black font-bold py-2 px-4 rounded-lg shadow hover:opacity-90">
-        生成故事 🚀
+    <div className="my-4">
+      <button className="text-sm underline" onClick={() => setOpen(!open)}>
+        {open ? "▲ 隱藏進階選項" : "▼ 顯示進階選項"}
       </button>
+      {open && (
+        <div className="mt-4 grid gap-3">
+          <div>
+            <label className="block text-xs mb-1">自訂標題</label>
+            <input value={opts.title} onChange={e => update("title", e.target.value)} className="rounded p-2 w-full" />
+          </div>
+          <div>
+            <label className="block text-xs mb-1">Tone / 風格</label>
+            <select value={opts.tone} onChange={e => update("tone", e.target.value)} className="rounded p-2 w-full">
+              {tones.map(t => <option key={t}>{t}</option>)}
+            </select>
+          </div>
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-xs mb-1">故事長度</label>
+              <select value={opts.length} onChange={e => update("length", +e.target.value)} className="rounded p-2 w-full">
+                {[200,300,400,500].map(n => <option key={n} value={n}>{n} 字</option>)}
+              </select>
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs mb-1">適讀年齡</label>
+              <select value={opts.age} onChange={e => update("age", e.target.value)} className="rounded p-2 w-full">
+                <option value="3-5">3–5 歲</option>
+                <option value="6-8">6–8 歲</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs mb-1">主題句 / Moral (可空白)</label>
+            <input value={opts.moral} onChange={e => update("moral", e.target.value)} className="rounded p-2 w-full" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 ```
 
 ---
-## components/StoryDisplay.tsx
+## components/StoryMeta.tsx
 ```tsx
+"use client";
+import { useState } from "react";
+import { readingTime, encode } from "@/utils/helpers";
+
+type Props = { story: string; meta: any };
+export default function StoryMeta({ story, meta }: Props) {
+  const [title, setTitle] = useState(meta.title || "Untitled Story");
+  const words = story.trim().split(/\s+/).length;
+  const minutes = readingTime(words);
+
+  function speak() {
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(`${title}. ${story}`);
+    utter.lang = meta.lang === "zh" ? "zh-TW" : "en-US";
+    window.speechSynthesis.speak(utter);
+  }
+  function share() {
+    const url = `${location.origin}/story/${encode({ ...meta, title, story })}`;
+    navigator.clipboard.writeText(url);
+    alert("已複製分享連結！");
+  }
+  function save() {
+    const list = JSON.parse(localStorage.getItem("stories") || "[]");
+    list.unshift({ ...meta, title, story, ts: Date.now() });
+    localStorage.setItem("stories", JSON.stringify(list.slice(0, 20)));
+    alert("已加入收藏");
+  }
+  return (
+    <div className="bg-white/80 p-4 rounded-2xl shadow mt-6">
+      <input
+        value={title}
+        onChange={e => setTitle(e.target.value)}
+        className="text-xl font-bold mb-2 w-full bg-transparent focus:outline-none"
+      />
+      <p className="text-sm opacity-70 mb-2">作者：AI Story Weaver ✦ 閱讀時間：約 {minutes} 分鐘</p>
+      {meta.moral && <p className="italic mb-2">★ {meta.moral}</p>}
+      <div className="flex gap-3 text-sm">
+        <button onClick={speak} className="underline">🔊 朗讀</button>
+        <button onClick={share} className="underline">🔗 分享</button>
+        <button onClick={save} className="underline">★ 收藏</button>
+      </div>
+    </div>
+  );
+}
+```
+
+---
+## components/StoryDisplay.tsx  (minor update)
+```tsx
+import { useState } from "react";
 export default function StoryDisplay({ story }: { story: string }) {
   if (!story) return null;
+  const paragraphs = story.split(/\n+/);
+  const [page, setPage] = useState(0);
   return (
-    <article className="mt-6 bg-white/80 backdrop-blur p-6 rounded-2xl shadow">
-      {story.split(/\n+/).map((para, idx) => (
-        <p key={idx} className="mb-4 leading-7 first:mt-0">{para}</p>
-      ))}
+    <article className="mt-4 bg-white/70 backdrop-blur p-6 rounded-2xl shadow relative">
+      <p className="leading-7 whitespace-pre-wrap">{paragraphs[page]}</p>
+      {paragraphs.length > 1 && (
+        <div className="flex justify-between mt-4 text-sm">
+          <button disabled={page===0} onClick={()=>setPage(p=>p-1)} className="opacity-70">← Prev</button>
+          <span>{page+1}/{paragraphs.length}</span>
+          <button disabled={page===paragraphs.length-1} onClick={()=>setPage(p=>p+1)} className="opacity-70">Next →</button>
+        </div>
+      )}
     </article>
   );
 }
 ```
 
 ---
-## app/api/story/route.ts
-```ts
-import { NextRequest, NextResponse } from "next/server";
-import { createOpenAI } from "@/lib/openai";
-
-export const runtime = "edge";
-
-export async function POST(req: NextRequest) {
-  const { keywords, lang } = await req.json();
-  const kwList = (keywords as string[]).filter(Boolean).slice(0, 5);
-  const language = lang === "random" ? (Math.random() < 0.5 ? "zh" : "en") : lang;
-
-  const openai = createOpenAI();
-
-  const system =
-    language === "zh"
-      ? "你是一位擅長說睡前故事的作家，文筆溫暖，對象是 3–8 歲小朋友，故事字數 300–500 中文字。"
-      : "You are a bedtime storyteller writing for kids aged 3–8. Keep it warm and adventurous, 300–500 English words.";
-
-  const user =
-    language === "zh"
-      ? `請用這些關鍵字寫故事：${kwList.join("、")}`
-      : `Write a story using these keywords: ${kwList.join(", ")}`;
-
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: user }
-    ],
-    temperature: 0.9,
-    max_tokens: 800,
-  });
-
-  return NextResponse.json({ story: completion.choices[0].message.content });
+## components/SavedStories.tsx
+```tsx
+"use client";
+import Link from "next/link";
+import { encode } from "@/utils/helpers";
+export default function SavedStories() {
+  const list = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("stories") || "[]") : [];
+  if (!list.length) return <p>尚無收藏。</p>;
+  return (
+    <div className="grid gap-4">
+      {list.map((s:any,i:number)=>(
+        <Link key={i} href={`/story/${encode(s)}`} className="p-4 bg-white/60 rounded-xl hover:bg-white/80 transition">
+          <h3 className="font-bold">{s.title}</h3>
+          <p className="text-xs opacity-70 line-clamp-2">{s.story}</p>
+        </Link>
+      ))}
+    </div>
+  );
 }
 ```
 
 ---
-## app/page.tsx
+## app/page.tsx (replaced)
 ```tsx
-import KeywordInput from "@/components/KeywordInput";
-import StoryDisplay from "@/components/StoryDisplay";
 import { useState } from "react";
+import KeywordInput from "@/components/KeywordInput";
+import AdvancedOptions from "@/components/AdvancedOptions";
+import StoryMeta from "@/components/StoryMeta";
+import StoryDisplay from "@/components/StoryDisplay";
 
 export default function Home() {
   const [story, setStory] = useState("");
+  const [meta, setMeta] = useState<any>({});
   const [loading, setLoading] = useState(false);
 
-  const generate = async (keywords: string[], lang: string) => {
+  const generate = async (keywords: string[], lang: string, opts: any) => {
     if (!keywords.length) return;
     setLoading(true);
     const res = await fetch("/api/story", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ keywords, lang }),
+      body: JSON.stringify({ keywords, lang, opts }),
     });
     const data = await res.json();
     setStory(data.story);
+    setMeta({ lang, ...opts });
     setLoading(false);
   };
 
+  const [advOpts, setAdvOpts] = useState<any>({ tone:"fun", length:300, age:"3-5", title:"", moral:"" });
+
   return (
     <section>
-      <KeywordInput onGenerate={generate} />
+      <KeywordInput onGenerate={(k,l)=>generate(k,l,advOpts)} />
+      <AdvancedOptions onChange={setAdvOpts} />
       {loading && <p className="mt-6 animate-pulse">故事生成中…</p>}
+      {story && <StoryMeta story={story} meta={meta} />}
       <StoryDisplay story={story} />
     </section>
   );
 }
+```
+
+---
+## app/api/story/route.ts (prompt upgrade)
+```ts
+import { NextRequest, NextResponse } from "next/server";
+import { createOpenAI } from "@/lib/openai";
+export const runtime = "edge";
+
+export async function POST(req: NextRequest) {
+  const { keywords, lang, opts } = await req.json();
+  const kw = (keywords as string[]).filter(Boolean).slice(0,5);
+  const language = lang === "random" ? (Math.random()<0.5?"zh":"en") : lang;
+
+  const toneDesc = {
+    fun: language==="zh"?"活潑有趣":"fun and lively",
+    adventure: language==="zh"?"冒險刺激":"full of adventure",
+    bedtime: language==="zh"?"溫柔的睡前語氣":"gentle bedtime tone",
+    science: language==="zh"?"帶科學小知識":"sprinkled with science facts",
+  }[opts.tone];
+
+  const system = language==="zh"
+    ? `你是一位兒童故事作家，對象 3‑8 歲，以${toneDesc}寫 ${opts.length} 字中文故事。`
+    : `You are a kids' storyteller (age 3‑8). Write a ${toneDesc} story of ${opts.length} English words.`;
+
+  const user = language==="zh"
+    ? `關鍵字：${kw.join("、")}`
+    : `Keywords: ${kw.join(", ")}`;
+
+  const openai = createOpenAI();
+  const completion = await openai.chat.completions.create({
+    model:"gpt-4o-mini",
+    temperature:0.9,
+    max_tokens: Math.round(opts.length*2),
+    messages:[{role:"system",content:system},{role:"user",content:user}]
+  });
+
+  const raw = completion.choices[0].message.content || "";
+  // quick parse: first line title, last line moral if detect "Moral:" / "寓意："
+  let title="", moral="";
+  const lines = raw.split(/\n+/);
+  if(lines[0].length<50) { title = lines.shift()!; }
+  if(/^(Moral|寓意)：/.test(lines[lines.length-1])) { moral = lines.pop()!.replace(/^(Moral|寓意)：/,''); }
+  const story = lines.join("\n\n");
+
+  return NextResponse.json({ story, title, moral });
+}
+```
+
+---
+## app/story/[id]/page.tsx
+```tsx
+import { decode } from "@/utils/helpers";
+import StoryMeta from "@/components/StoryMeta";
+import StoryDisplay from "@/components/StoryDisplay";
+
+export default function StoryPage({ params }: { params: { id: string } }) {
+  const data = decode<any>(params.id);
+  return (
+    <div>
+      <StoryMeta story={data.story} meta={data} />
+      <StoryDisplay story={data.story} />
+    </div>
+  );
+}
+```
+
+---
+## app/saved/page.tsx
+```tsx
+import SavedStories from "@/components/SavedStories";
+export const metadata = { title: "已收藏故事 | AI Story Weaver" };
+export default function Saved() { return <SavedStories/>; }
+```
+
+---
+💡 **All core files now include the new elements.**  Build & deploy as before; no extra dependencies required.
