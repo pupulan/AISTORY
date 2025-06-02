@@ -1,0 +1,299 @@
+# ai-story-weaver – Next.js 14 (App Router)
+
+---
+## README.md
+```md
+# AI Story Weaver
+
+A tiny web‑app that turns a handful of keywords into an instant children’s story (age 3‑8) in **Chinese, English, or a random pick**.
+
+### 🛠 Quick start
+```bash
+# 1. Clone
+npx degit your-github-name/ai-story-weaver
+cd ai-story-weaver
+
+# 2. Install deps
+npm install  # or pnpm i / yarn
+
+# 3. Environment
+cp .env.example .env.local  # add your OPENAI_API_KEY
+
+# 4. Dev mode
+npm run dev
+
+# 5. Deploy (Vercel recommended — free tier is fine)
+# push to GitHub →  “Add New Project” in Vercel → follow prompts → done
+```
+
+### 🆓 Free hosting choices
+| Host | Pros | Notes |
+|------|------|-------|
+| **Vercel** | 1‑click import for Next.js, edge functions out‑of‑box | auto `*.vercel.app` sub‑domain |
+| **Netlify** | free tier OK, good CMS plugins | needs `netlify.toml` for edge funcs |
+
+### 📂 Minimal tech stack
+* **Next.js 14** (App Router, React 18)
+* **TypeScript**
+* **Tailwind CSS** + **shadcn/ui**
+* **OpenAI SDK** for GPT‑4o calls
+* Zero DB (stateless API)
+```
+
+---
+## .env.example
+```env
+# Rename to .env.local and fill in your key
+OPENAI_API_KEY=
+```
+
+---
+## package.json
+```json
+{
+  "name": "ai-story-weaver",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "14.2.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "openai": "^4.25.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.29",
+    "autoprefixer": "^10.4.19",
+    "eslint": "^8.56.0",
+    "postcss": "^8.4.33",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.5.0"  }
+}
+```
+
+---
+## next.config.js
+```js
+/** @type {import('next').NextConfig} */
+module.exports = {
+  experimental: { appDir: true },
+  reactStrictMode: true,
+};
+```
+
+---
+## tailwind.config.js
+```js
+module.exports = {
+  content: [
+    "./app/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}"
+  ],
+  theme: {
+    extend: {
+      colors: {
+        brandBlue: "#e8f4ff",   // 淺藍底
+        brandYellow: "#FFD400"  // 亮黃色 CTA
+      }
+    }
+  },
+  plugins: [],
+};
+```
+
+---
+## tsconfig.json
+```json
+{
+  "compilerOptions": {
+    "target": "ES2021",
+    "lib": ["dom", "dom.iterable", "es2021"],
+    "allowJs": false,
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx"
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules"]
+}
+```
+
+---
+## styles/globals.css
+```css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,body {
+  @apply bg-brandBlue text-gray-800;
+}
+```
+
+---
+## lib/openai.ts
+```ts
+import OpenAI from "openai";
+
+export function createOpenAI() {
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
+```
+
+---
+## app/layout.tsx
+```tsx
+import "../styles/globals.css";
+import { ReactNode } from "react";
+
+export const metadata = {
+  title: "AI Story Weaver",
+  description: "Turn a few keywords into a magical kids’ story in seconds!",
+};
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en">
+      <body className="min-h-screen flex flex-col items-center p-4">
+        <header className="text-2xl font-bold mb-4">AI Story Weaver</header>
+        <main className="w-full max-w-xl flex-1">{children}</main>
+        <footer className="text-xs mt-8 opacity-70">© {new Date().getFullYear()} AI Story Weaver</footer>
+      </body>
+    </html>
+  );
+}
+```
+
+---
+## components/KeywordInput.tsx
+```tsx
+"use client";
+import { useState } from "react";
+
+export default function KeywordInput({ onGenerate }: { onGenerate: (k: string[], lang: string) => void }) {
+  const [keywords, setKeywords] = useState("");
+  const [lang, setLang] = useState("random");
+
+  return (
+    <div className="space-y-4">
+      <input
+        type="text"
+        placeholder="輸入 1~5 個關鍵字，以逗號分隔"
+        value={keywords}
+        onChange={(e) => setKeywords(e.target.value)}
+        className="w-full p-3 rounded-lg border focus:outline-none"
+      />
+
+      <select value={lang} onChange={(e) => setLang(e.target.value)} className="p-2 rounded-lg border">
+        <option value="random">隨機語系 / Random</option>
+        <option value="zh">繁體中文</option>
+        <option value="en">English</option>
+      </select>
+
+      <button
+        onClick={() => onGenerate(keywords.split(/,\s*/), lang)}
+        className="w-full bg-brandYellow text-black font-bold py-2 px-4 rounded-lg shadow hover:opacity-90">
+        生成故事 🚀
+      </button>
+    </div>
+  );
+}
+```
+
+---
+## components/StoryDisplay.tsx
+```tsx
+export default function StoryDisplay({ story }: { story: string }) {
+  if (!story) return null;
+  return (
+    <article className="mt-6 bg-white/80 backdrop-blur p-6 rounded-2xl shadow">
+      {story.split(/\n+/).map((para, idx) => (
+        <p key={idx} className="mb-4 leading-7 first:mt-0">{para}</p>
+      ))}
+    </article>
+  );
+}
+```
+
+---
+## app/api/story/route.ts
+```ts
+import { NextRequest, NextResponse } from "next/server";
+import { createOpenAI } from "@/lib/openai";
+
+export const runtime = "edge";
+
+export async function POST(req: NextRequest) {
+  const { keywords, lang } = await req.json();
+  const kwList = (keywords as string[]).filter(Boolean).slice(0, 5);
+  const language = lang === "random" ? (Math.random() < 0.5 ? "zh" : "en") : lang;
+
+  const openai = createOpenAI();
+
+  const system =
+    language === "zh"
+      ? "你是一位擅長說睡前故事的作家，文筆溫暖，對象是 3–8 歲小朋友，故事字數 300–500 中文字。"
+      : "You are a bedtime storyteller writing for kids aged 3–8. Keep it warm and adventurous, 300–500 English words.";
+
+  const user =
+    language === "zh"
+      ? `請用這些關鍵字寫故事：${kwList.join("、")}`
+      : `Write a story using these keywords: ${kwList.join(", ")}`;
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user }
+    ],
+    temperature: 0.9,
+    max_tokens: 800,
+  });
+
+  return NextResponse.json({ story: completion.choices[0].message.content });
+}
+```
+
+---
+## app/page.tsx
+```tsx
+import KeywordInput from "@/components/KeywordInput";
+import StoryDisplay from "@/components/StoryDisplay";
+import { useState } from "react";
+
+export default function Home() {
+  const [story, setStory] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const generate = async (keywords: string[], lang: string) => {
+    if (!keywords.length) return;
+    setLoading(true);
+    const res = await fetch("/api/story", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keywords, lang }),
+    });
+    const data = await res.json();
+    setStory(data.story);
+    setLoading(false);
+  };
+
+  return (
+    <section>
+      <KeywordInput onGenerate={generate} />
+      {loading && <p className="mt-6 animate-pulse">故事生成中…</p>}
+      <StoryDisplay story={story} />
+    </section>
+  );
+}
